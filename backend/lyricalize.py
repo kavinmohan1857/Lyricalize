@@ -25,11 +25,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-
-GENIUS_ACCESS_TOKEN = 
-SPOTIFY_CLIENT_ID = 
-SPOTIFY_CLIENT_SECRET = 
-REDIRECT_URI = "http://localhost:8000/callback"
+# Access env variables
+GENIUS_ACCESS_TOKEN = os.getenv("GENIUS_ACCESS_TOKEN")
+SPOTIFY_CLIENT_ID = os.getenv("SPOTIFY_CLIENT_ID")
+SPOTIFY_CLIENT_SECRET = os.getenv("SPOTIFY_CLIENT_SECRET")
+REDIRECT_URI = os.getenv("REDIRECT_URI", "http://localhost:8000/callback")  # Default to local callback for testing
 
 HEADERS = {"Authorization": f"Bearer {GENIUS_ACCESS_TOKEN}"}
 
