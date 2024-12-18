@@ -1,28 +1,20 @@
-import './App.css';
-import { useEffect } from 'react';
-import { getLyricalData } from './api'; // Import your API call
-
+import React from "react";
+import { BrowserRouter as Router, Route, Routes } from "react-router-dom";
+import LandingPage from "./pages/LandingPage";
+import LoadingPage from "./pages/LoadingPage";
+import WordMapPage from "./pages/WordMapPage";
+import Header from "./components/Header";
 
 function App() {
-  useEffect(() => {
-    const fetchData = async () => {
-      const data = await getLyricalData();
-      console.log(data);
-    };
-
-    fetchData();
-  }, []);
-
   return (
-    <div className="App">
-      <header className="App-header">
-        <h1>Lyricalize</h1>
-        <p>Analyzing your top Spotify songs...</p>
-      </header>
-      <main>
-        {/* Components to display data */}
-      </main>
-    </div>
+    <Router>
+      <Header />
+      <Routes>
+        <Route path="/" element={<LandingPage />} />
+        <Route path="/loading" element={<LoadingPage />} />
+        <Route path="/wordmap" element={<WordMapPage />} />
+      </Routes>
+    </Router>
   );
 }
 
