@@ -116,46 +116,43 @@ def get_top_songs():
 
 @app.post("/api/word-frequencies")
 def get_word_frequencies():
-    word_count = Counter()
+    from fastapi.responses import StreamingResponse
+import json
 
-    # Fetch top songs
+@app.post("/api/word-frequencies")
+async def get_word_frequencies():
     sp = get_spotify_client()
-
     top_songs = [
         {"title": track["name"], "artist": track["artists"][0]["name"]}
         for track in sp.current_user_top_tracks(limit=50, time_range="medium_term")["items"]
     ]
+    async def filter_stopwords(lyrics):
+            stop_words = set(stopwords.words('english'))
+            filtered_words = [
+                word.lower().strip(".,!?\"'()[]") 
+                for word in lyrics.split() 
+                if word.lower().strip(".,!?\"'()[]") not in stop_words
+            ]
+            return filtered_words
 
+    async def word_stream():
+        word_count = Counter()
+        for idx, song in enumerate(top_songs, start=1):
+            try:
+                lyrics = search_lyrics(song["title"], song["artist"])
+                if lyrics:
+                    filtered_words = filter_stopwords(lyrics)
+                    word_count.update(filtered_words)
+                    yield f"data: {json.dumps({'song': song['title'], 'progress': idx, 'total': len(top_songs)})}\n\n"
+                else:
+                    yield f"data: {json.dumps({'song': song['title'], 'progress': idx, 'total': len(top_songs), 'error': 'No lyrics'})}\n\n"
+            except Exception as e:
+                yield f"data: {json.dumps({'song': song['title'], 'error': str(e)})}\n\n"
 
-    def filter_stopwords(lyrics):
-        stop_words = set(stopwords.words('english'))
-        filtered_words = [
-            word.lower().strip(".,!?\"'()[]") 
-            for word in lyrics.split() 
-            if word.lower().strip(".,!?\"'()[]") not in stop_words
-        ]
-        return filtered_words
+        yield f"data: {json.dumps({'status': 'complete', 'top_words': word_count.most_common(50)})}\n\n"
 
+    return StreamingResponse(word_stream(), media_type="text/event-stream")
 
-    # Generate the word frequency map
-    for song in top_songs:
-        try:
-            lyrics = search_lyrics(song["title"], song["artist"])
-            if lyrics:
-                filtered_words = filter_stopwords(lyrics)
-                word_count.update(filtered_words)
-                print(f"Processed: {song['title']} by {song['artist']}")
-            else:
-                print(f"Lyrics not found for: {song['title']} by {song['artist']}")
-        except Exception as e:
-            print(f"Error processing {song['title']} by {song['artist']}: {e}")
-
-    # Print the top 10 words
-    print("\nTop 10 Words in the Word Map:")
-    for word, freq in word_count.most_common(10):
-        print(f"{word}: {freq}")
-
-    return JSONResponse({"top_words": word_count.most_common(50)})
 
 # Default root endpoint
 @app.get("/")

@@ -1,17 +1,24 @@
 import React from "react";
-import WordCloud from "react-wordcloud";
+import { useLocation } from "react-router-dom";
 
 function WordMapPage() {
-  const wordData = JSON.parse(localStorage.getItem("wordData")) || [];
-
-  const words = wordData.map(([text, value]) => ({ text, value }));
+  const location = useLocation();
+  const { data } = location.state || { data: [] };
 
   return (
-    <div style={{ textAlign: "center", marginTop: "20px" }}>
-      <h2>Your Spotify Lyrics Word Map</h2>
-      <div style={{ width: "800px", height: "500px", margin: "0 auto" }}>
-        <WordCloud words={words} />
-      </div>
+    <div style={{ textAlign: "center", marginTop: "5%" }}>
+      <h2>Your Word Map</h2>
+      <ul style={{ listStyleType: "none", fontSize: "1.2em" }}>
+        {data.length > 0 ? (
+          data.map(([word, freq], index) => (
+            <li key={index}>
+              {word}: {freq}
+            </li>
+          ))
+        ) : (
+          <p>No word map data available.</p>
+        )}
+      </ul>
     </div>
   );
 }
