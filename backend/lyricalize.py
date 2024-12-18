@@ -6,7 +6,6 @@ from collections import Counter
 import nltk
 nltk.download('stopwords')
 from nltk.corpus import stopwords
-from configparser import ConfigParser
 import os
 import spotipy
 import webbrowser
@@ -17,10 +16,11 @@ import uvicorn
 # FastAPI app setup
 app = FastAPI()
 
-# Allow frontend requests
+# CORS Setup
+origins = [os.getenv("FRONTEND_URL", "http://localhost:3000")]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],  # Frontend origin
+    allow_origins=origins,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -39,8 +39,10 @@ sp_oauth = SpotifyOAuth(
     client_id=SPOTIFY_CLIENT_ID,
     client_secret=SPOTIFY_CLIENT_SECRET,
     redirect_uri=REDIRECT_URI,
-    scope=scope
+    scope=scope,
+    cache_path=".spotify_cache"  # Cache the token locally
 )
+
 
 
 
@@ -84,9 +86,17 @@ def scrape_lyrics(song_url):
         print(f"Error scraping lyrics from {song_url}: {e}")
     return None
 
+# Create a function to get a valid token
+def get_spotify_client():
+    token_info = sp_oauth.get_cached_token()
+    if not token_info or sp_oauth.is_token_expired(token_info):
+        token_info = sp_oauth.refresh_access_token(token_info['refresh_token'])
+    return spotipy.Spotify(auth=token_info['access_token'])
+
 # Endpoint to get top songs and fetch word frequencies
 @app.get("/api/top-songs")
 def get_top_songs():
+    sp = get_spotify_client()
     results = sp.current_user_top_tracks(limit=50, time_range="medium_term")
     songs = [{"title": track["name"], "artist": track["artists"][0]["name"]} for track in results["items"]]
     return {"songs": songs}
@@ -96,10 +106,13 @@ def get_word_frequencies():
     word_count = Counter()
 
     # Fetch top songs
+    sp = get_spotify_client()
+
     top_songs = [
         {"title": track["name"], "artist": track["artists"][0]["name"]}
         for track in sp.current_user_top_tracks(limit=50, time_range="medium_term")["items"]
     ]
+
 
     def filter_stopwords(lyrics):
         stop_words = set(stopwords.words('english'))
@@ -136,6 +149,8 @@ def get_word_frequencies():
 def read_root():
     return {"message": "Welcome to the Lyricalize API! Use the /api endpoints to interact."}
 
+FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000")
+
 # Spotify OAuth callback
 @app.get("/callback")
 def callback(code: str):
@@ -148,7 +163,7 @@ def callback(code: str):
         print("Login successful! Access token acquired.")
 
         # Redirect the user to the frontend with access_token as a query parameter
-        redirect_url = f"http://localhost:3000/loading?access_token={access_token}"
+        redirect_url = f"{FRONTEND_URL}/loading?access_token={access_token}"
         return RedirectResponse(url=redirect_url)
 
     except Exception as e:
