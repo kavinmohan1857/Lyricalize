@@ -25,16 +25,6 @@ app.mount("/static", StaticFiles(directory="build/static"), name="static")
 def serve_react():
     return FileResponse("build/index.html")
 
-# Optional: Catch-all route to serve index.html for React Router
-from fastapi.responses import RedirectResponse
-
-@app.get("/{full_path:path}")
-def serve_react_catchall(full_path: str):
-    if full_path.startswith("api/"):
-        return {"detail": "Not Found"}
-    return FileResponse("build/index.html")
-
-
 # CORS Setup
 origins = [
     "http://localhost:3000",  # For local testing
@@ -200,6 +190,14 @@ def spotify_login():
     auth_url = sp_oauth.get_authorize_url()
     print(f"Generated Spotify Auth URL: {auth_url}")
     return {"auth_url": auth_url}
+# Optional: Catch-all route to serve index.html for React Router
+from fastapi.responses import RedirectResponse
+
+@app.get("/{full_path:path}")
+def serve_react_catchall(full_path: str):
+    if full_path.startswith("api/"):
+        return {"detail": "Not Found"}
+    return FileResponse("build/index.html")
 
 
 if __name__ == "__main__":
