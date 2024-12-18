@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import axios from "axios";
+import API_URL from "../config"; // Import the API URL
 
 function LandingPage() {
   const [spotifyAuthUrl, setSpotifyAuthUrl] = useState("");
@@ -8,7 +9,7 @@ function LandingPage() {
   useEffect(() => {
     const fetchAuthUrl = async () => {
       try {
-        const response = await axios.get("http://localhost:8000/api/login");
+        const response = await axios.get(`${API_URL}/api/login`);
         setSpotifyAuthUrl(response.data.auth_url);
       } catch (error) {
         console.error("Error fetching Spotify auth URL:", error);
