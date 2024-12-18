@@ -25,13 +25,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Genius and Spotify Setup using Config
-config = ConfigParser()
-config.read('config.cfg')
 
-GENIUS_ACCESS_TOKEN = config.get('genius', 'client_access_token')
-SPOTIFY_CLIENT_ID = config.get('spotify', 'client_id')
-SPOTIFY_CLIENT_SECRET = config.get('spotify', 'client_secret')
+GENIUS_ACCESS_TOKEN = 
+SPOTIFY_CLIENT_ID = 
+SPOTIFY_CLIENT_SECRET = 
 REDIRECT_URI = "http://localhost:8000/callback"
 
 HEADERS = {"Authorization": f"Bearer {GENIUS_ACCESS_TOKEN}"}
