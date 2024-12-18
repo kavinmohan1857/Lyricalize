@@ -31,7 +31,11 @@ def serve_react_catchall():
     return FileResponse("build/index.html")
 
 # CORS Setup
-origins = [os.getenv("FRONTEND_URL", "http://localhost:3000")]
+origins = [
+    "http://localhost:3000",  # For local testing
+    "https://lyricalize-419bc3d24ee4.herokuapp.com"  # Deployed frontend
+]
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
