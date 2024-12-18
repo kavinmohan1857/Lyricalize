@@ -2,6 +2,8 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from collections import Counter
 import nltk
 nltk.download('stopwords')
@@ -15,6 +17,18 @@ import uvicorn
 
 # FastAPI app setup
 app = FastAPI()
+
+# Serve React static files
+app.mount("/static", StaticFiles(directory="build/static"), name="static")
+
+@app.get("/")
+def serve_react():
+    return FileResponse("build/index.html")
+
+# Optional: Catch-all route to serve index.html for React Router
+@app.get("/{full_path:path}")
+def serve_react_catchall():
+    return FileResponse("build/index.html")
 
 # CORS Setup
 origins = [os.getenv("FRONTEND_URL", "http://localhost:3000")]
