@@ -193,6 +193,7 @@ def callback(code: str):
 def spotify_login():
     # Generate Spotify authorization URL
     auth_url = sp_oauth.get_authorize_url()
+    print(f"Generated Spotify Auth URL: {auth_url}")
     return {"auth_url": auth_url}
 
 
