@@ -1,23 +1,27 @@
 import React, { useState, useEffect } from "react";
 import axios from "axios";
-import API_URL from "../config"; // Make sure API_URL points to the correct backend
+import { useNavigate } from "react-router-dom"; // Use for navigation
+import API_URL from "../config";
 
 function LoadingPage() {
   const [status, setStatus] = useState("Starting word map generation...");
   const [error, setError] = useState(null);
-  const [topWords, setTopWords] = useState([]);
+  const navigate = useNavigate(); // React Router hook for navigation
 
   useEffect(() => {
     const fetchWordFrequencies = async () => {
       try {
-        // Update the status step-by-step
         setStatus("Fetching top songs from Spotify...");
+
         const response = await axios.post(`${API_URL}/api/word-frequencies`);
 
-        // Process API response
         if (response.data && response.data.top_words) {
-          setTopWords(response.data.top_words);
           setStatus("Word map successfully generated!");
+
+          // Redirect to the word map page after a delay
+          setTimeout(() => {
+            navigate("/word-map", { state: { data: response.data.top_words } });
+          }, 1000); // Delay for better UX
         } else {
           throw new Error("No word data received from server.");
         }
@@ -28,7 +32,7 @@ function LoadingPage() {
     };
 
     fetchWordFrequencies();
-  }, []);
+  }, [navigate]);
 
   return (
     <div style={{ textAlign: "center", marginTop: "20%" }}>
@@ -51,20 +55,6 @@ function LoadingPage() {
               animation: "spin 1s linear infinite",
             }}
           ></div>
-        </div>
-      )}
-
-      {/* Display top words if ready */}
-      {topWords.length > 0 && (
-        <div>
-          <h3>Top Words:</h3>
-          <ul>
-            {topWords.map(([word, freq], index) => (
-              <li key={index}>
-                {word}: {freq}
-              </li>
-            ))}
-          </ul>
         </div>
       )}
 
