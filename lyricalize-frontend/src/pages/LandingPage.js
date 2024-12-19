@@ -5,12 +5,19 @@ import API_URL from "../config"; // Import the API URL
 function LandingPage() {
   const [spotifyAuthUrl, setSpotifyAuthUrl] = useState("");
 
-  // Fetch the Spotify login URL from the backend
+  // Fetch the Spotify login URL and JWT token from the backend
   useEffect(() => {
     const fetchAuthUrl = async () => {
       try {
         const response = await axios.get(`${API_URL}/api/login`);
         setSpotifyAuthUrl(response.data.auth_url);
+
+        // Store the JWT token in localStorage for future authenticated requests
+        if (response.data.token) {
+          localStorage.setItem("jwt_token", response.data.token);
+        } else {
+          console.error("JWT token not received from backend");
+        }
       } catch (error) {
         console.error("Error fetching Spotify auth URL:", error);
       }

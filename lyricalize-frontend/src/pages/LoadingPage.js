@@ -12,15 +12,25 @@ function LoadingPage() {
 
   useEffect(() => {
     const fetchWordFrequencies = async () => {
+      const token = localStorage.getItem("jwt_token"); // Retrieve the token
+
+      if (!token) {
+        setError("Authorization token is missing. Please log in again.");
+        return;
+      }
+
       try {
         const response = await fetch(`${API_URL}/api/word-frequencies`, {
           headers: {
-            Authorization: `Bearer ${localStorage.getItem("token")}`, // Replace with your token logic
+            Authorization: `Bearer ${token}`, // Set the token in the header
           },
         });
 
         if (!response.ok) {
-          throw new Error("Failed to fetch word frequencies");
+          if (response.status === 401) {
+            throw new Error("Unauthorized. Please log in again.");
+          }
+          throw new Error("Failed to fetch word frequencies.");
         }
 
         const reader = response.body.getReader();
@@ -54,7 +64,7 @@ function LoadingPage() {
         }
       } catch (err) {
         console.error("Error fetching word frequencies:", err);
-        setError("An error occurred while generating your word map.");
+        setError(err.message || "An error occurred while generating your word map.");
       }
     };
 

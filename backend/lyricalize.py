@@ -175,11 +175,15 @@ def spotify_login():
 
 # Spotify Callback Endpoint
 @app.get("/callback")
-def callback(code: str = None, token: str = None):
-    if not code or not token:
-        raise HTTPException(status_code=422, detail="Missing 'code' or 'token' query parameter")
+def callback(request: Request, code: str):
+    # Get the token from the frontend Authorization header
+    auth_header = request.headers.get("Authorization")
+    if not auth_header or not auth_header.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Authorization header missing or invalid")
 
+    token = auth_header.split(" ")[1]
     user = decode_jwt(token)
+
     sp_oauth = get_spotify_oauth(user["user_id"])
 
     try:
@@ -187,7 +191,7 @@ def callback(code: str = None, token: str = None):
         sp_oauth.get_access_token(code, as_dict=True)
 
         # Redirect back to the frontend's loading page
-        return RedirectResponse(url="https://lyricalize-419bc3d24ee4.herokuapp.com/loadingpage")
+        return RedirectResponse(url=f"{os.getenv('FRONTEND_URL')}/loadingpage")
     except Exception as e:
         print(f"Error in /callback: {e}")
         return JSONResponse(content={"error": f"Authentication failed: {str(e)}"}, status_code=500)
