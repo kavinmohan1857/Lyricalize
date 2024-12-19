@@ -165,7 +165,7 @@ def callback(request: Request, code: str):
         request.session["spotify_token"] = token_info
 
         # Redirect back to the frontend
-        return RedirectResponse(url="https://your-deployment-url.com/loading")
+        return RedirectResponse(url="https://lyricalize-419bc3d24ee4.herokuapp.com/")
     except Exception as e:
         print(f"Error in /callback: {e}")
         return JSONResponse(content={"error": f"Authentication failed: {str(e)}"}, status_code=500)
@@ -183,7 +183,8 @@ async def ensure_session_id(request: Request, call_next):
 def serve_react_catchall(full_path: str):
     if not full_path.startswith("api/"):  # Ensure this doesn’t conflict with API routes
         return RedirectResponse(url="/static/index.html")
-    return {"error": "React frontend not configured for this path."}
+    return {"error": f"Invalid path: {full_path}"}
+
 
 if __name__ == "__main__":
     import uvicorn
