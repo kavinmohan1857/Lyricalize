@@ -171,27 +171,27 @@ def spotify_login():
     sp_oauth = get_spotify_oauth(user_id)
     auth_url = sp_oauth.get_authorize_url()
 
-    return {"auth_url": auth_url, "token": token}
+    # Append the token to the callback URL
+    return {"auth_url": f"{auth_url}&state={token}"}
+
 
 # Spotify Callback Endpoint
 @app.get("/callback")
-def callback(request: Request, code: str):
-    # Get the token from the frontend Authorization header
-    auth_header = request.headers.get("Authorization")
-    if not auth_header or not auth_header.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="Authorization header missing or invalid")
-
-    token = auth_header.split(" ")[1]
-    user = decode_jwt(token)
-
-    sp_oauth = get_spotify_oauth(user["user_id"])
+def callback(code: str = None, state: str = None):
+    if not code or not state:
+        raise HTTPException(status_code=422, detail="Missing 'code' or 'state' query parameter")
 
     try:
+        # Decode the state (JWT token)
+        user = decode_jwt(state)
+
+        sp_oauth = get_spotify_oauth(user["user_id"])
+
         # Exchange authorization code for an access token
         sp_oauth.get_access_token(code, as_dict=True)
 
         # Redirect back to the frontend's loading page
-        return RedirectResponse(url=f"{os.getenv('FRONTEND_URL')}/loadingpage")
+        return RedirectResponse(url="https://lyricalize-419bc3d24ee4.herokuapp.com/loadingpage")
     except Exception as e:
         print(f"Error in /callback: {e}")
         return JSONResponse(content={"error": f"Authentication failed: {str(e)}"}, status_code=500)
