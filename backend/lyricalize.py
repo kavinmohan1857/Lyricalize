@@ -20,14 +20,14 @@ nltk.download("stopwords")
 # FastAPI app setup
 app = FastAPI()
 
-# Session middleware setup
-app.add_middleware(SessionMiddleware, secret_key="Hx7lVQ8c1PUqNejzMXe9km5bLaZNhNT2YR0GJq9eG0o")
 # CORS Setup
 origins = [
     "http://localhost:3000",  # Local testing
     "https://lyricalize-419bc3d24ee4.herokuapp.com",  # Deployed frontend URL
 ]
 
+# Session middleware setup
+app.add_middleware(SessionMiddleware, secret_key="Hx7lVQ8c1PUqNejzMXe9km5bLaZNhNT2YR0GJq9eG0o")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
@@ -45,6 +45,18 @@ SPOTIFY_CLIENT_ID = os.getenv("SPOTIFY_CLIENT_ID")
 SPOTIFY_CLIENT_SECRET = os.getenv("SPOTIFY_CLIENT_SECRET")
 REDIRECT_URI = os.getenv("REDIRECT_URI", "http://localhost:8000/callback")
 HEADERS = {"Authorization": f"Bearer {GENIUS_ACCESS_TOKEN}"}
+
+# Middleware to Ensure Session ID
+@app.middleware("http")
+async def ensure_session_id(request: Request, call_next):
+    print("Middleware: Checking session ID")
+    if "session_id" not in request.session:
+        print("Middleware: Generating new session ID")
+        request.session["session_id"] = str(uuid4())
+    response = await call_next(request)
+    return response
+
+
 
 # Spotify OAuth setup (per user session)
 def get_spotify_oauth(session_id: str):
@@ -169,14 +181,6 @@ def callback(request: Request, code: str):
     except Exception as e:
         print(f"Error in /callback: {e}")
         return JSONResponse(content={"error": f"Authentication failed: {str(e)}"}, status_code=500)
-
-# Middleware to Ensure Session ID
-@app.middleware("http")
-async def ensure_session_id(request: Request, call_next):
-    if "session_id" not in request.session:
-        request.session["session_id"] = str(uuid4())
-    response = await call_next(request)
-    return response
 
 # Catch-All Route for React Router
 @app.get("/{full_path:path}")
