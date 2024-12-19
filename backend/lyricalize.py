@@ -33,6 +33,7 @@ app.add_middleware(
     allow_origins=origins,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["Content-Type"],
 )
 
 # Environment variables
@@ -97,6 +98,11 @@ def filter_stopwords(lyrics):
         for word in lyrics.split()
         if word.lower().strip(".,!?\"'()[]") not in stop_words
     ]
+
+# Endpoint: Stream Word Frequencies
+@app.get("/api/word-frequencies")
+async def get_word_frequencies_get():
+    return await get_word_frequencies()
 
 # Endpoint: Stream Word Frequencies
 @app.post("/api/word-frequencies")
