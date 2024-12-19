@@ -194,6 +194,13 @@ def serve_react_catchall(full_path: str):
         return RedirectResponse(url="/static/index.html")
     return {"error": f"Invalid path: {full_path}"}
 
+
+from fastapi.responses import FileResponse
+
+@app.get("/")
+async def serve_react_index():
+    return FileResponse("build/index.html")
+
 if __name__ == "__main__":
     import uvicorn
 
