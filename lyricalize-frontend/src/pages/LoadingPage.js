@@ -20,10 +20,10 @@ function LoadingPage() {
         setWordMap(data.top_words);
         setIsComplete(true);
         eventSource.close();
-      } else if (data.song && data.artist) {
+      } else if (data.song) {
         // Update progress, current song, and artist
         setCurrentSong(data.song);
-        setCurrentArtist(data.artist);
+        setCurrentArtist(data.artist || "Unknown Artist"); // Handle missing artist
         setProgress(data.progress);
         setTotalSongs(data.total || 50);
       }
@@ -34,7 +34,9 @@ function LoadingPage() {
       eventSource.close();
     };
 
-    return () => eventSource.close();
+    return () => {
+      eventSource.close();
+    };
   }, []);
 
   if (isComplete) {
@@ -42,7 +44,14 @@ function LoadingPage() {
     return (
       <div style={{ textAlign: "center", marginTop: "20%" }}>
         <h2>Top Words from Your Spotify Songs</h2>
-        <ul style={{ listStyleType: "none", padding: 0, textAlign: "left", display: "inline-block" }}>
+        <ul
+          style={{
+            listStyleType: "none",
+            padding: 0,
+            textAlign: "left",
+            display: "inline-block",
+          }}
+        >
           {wordMap.map(([word, count], index) => (
             <li key={index} style={{ marginBottom: "10px" }}>
               <strong>{word}</strong>: {count}
@@ -53,7 +62,7 @@ function LoadingPage() {
     );
   }
 
-  // Render progress bar while processing
+  // Render progress bar and song info while processing
   return (
     <div style={{ textAlign: "center", marginTop: "20%" }}>
       <h2>Generating your Word Map...</h2>
