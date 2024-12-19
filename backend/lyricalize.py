@@ -22,10 +22,6 @@ app = FastAPI()
 
 # Session middleware setup
 app.add_middleware(SessionMiddleware, secret_key="Hx7lVQ8c1PUqNejzMXe9km5bLaZNhNT2YR0GJq9eG0o")
-
-# Serve React static files (if applicable)
-app.mount("/static", StaticFiles(directory="build/static"), name="static")
-
 # CORS Setup
 origins = [
     "http://localhost:3000",  # Local testing
@@ -38,6 +34,10 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Serve React static files (if applicable)
+app.mount("/static", StaticFiles(directory="build/static"), name="static")
+
 
 # Environment variables
 GENIUS_ACCESS_TOKEN = os.getenv("GENIUS_ACCESS_TOKEN")
