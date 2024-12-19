@@ -2,6 +2,7 @@ from fastapi import FastAPI, Request, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse, RedirectResponse
 from starlette.middleware.sessions import SessionMiddleware
+from fastapi.staticfiles import StaticFiles
 from collections import Counter
 from nltk.corpus import stopwords
 from bs4 import BeautifulSoup
@@ -22,7 +23,7 @@ app = FastAPI()
 app.add_middleware(SessionMiddleware, secret_key="your_secret_key")
 
 # Serve React static files (if applicable)
-# app.mount("/static", StaticFiles(directory="build/static"), name="static")
+app.mount("/static", StaticFiles(directory="build/static"), name="static")
 
 # CORS Setup
 origins = [
@@ -153,11 +154,13 @@ def callback(request: Request, code: str):
     except Exception as e:
         return {"error": f"Authentication failed: {str(e)}"}
 
+
+from fastapi.responses import FileResponse
 # Catch-All Route for React Router
 @app.get("/{full_path:path}")
 def serve_react_catchall(full_path: str):
-    if full_path.startswith("api/"):
-        return {"detail": "Not Found"}
+    if not full_path.startswith("api/"):  # Ensure this doesn’t conflict with API routes
+        return FileResponse("build/index.html")
     return {"error": "React frontend not configured for this path."}
 
 if __name__ == "__main__":
