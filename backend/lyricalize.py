@@ -4,6 +4,7 @@ from fastapi.responses import StreamingResponse, FileResponse, RedirectResponse
 from collections import Counter
 from nltk.corpus import stopwords
 from bs4 import BeautifulSoup
+from fastapi.staticfiles import StaticFiles
 import nltk
 import os
 import spotipy
@@ -150,4 +151,6 @@ def serve_react_catchall(full_path: str):
     return FileResponse("build/index.html")
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    import uvicorn
+    port = int(os.environ.get("PORT", 8000))  # Default to 8000 if PORT is not set
+    uvicorn.run(app, host="0.0.0.0", port=port)
