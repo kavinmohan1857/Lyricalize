@@ -1,34 +1,35 @@
 from fastapi import FastAPI, Request, Depends
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse, RedirectResponse
-from starlette.middleware.sessions import SessionMiddleware
+from fastapi.middleware.sessions import SessionMiddleware
+from fastapi.responses import StreamingResponse, RedirectResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from collections import Counter
 from nltk.corpus import stopwords
 from bs4 import BeautifulSoup
+from uuid import uuid4
 import nltk
 import os
 import spotipy
 import json
 import requests
-from spotipy.oauth2 import SpotifyOAuth
 import asyncio
+from spotipy.oauth2 import SpotifyOAuth
 
 nltk.download("stopwords")
 
 # FastAPI app setup
 app = FastAPI()
 
-# Add session middleware for user-specific data
-app.add_middleware(SessionMiddleware, secret_key="your_secret_key")
+# Session middleware setup
+app.add_middleware(SessionMiddleware, secret_key="Hx7lVQ8c1PUqNejzMXe9km5bLaZNhNT2YR0GJq9eG0o")
 
 # Serve React static files (if applicable)
 app.mount("/static", StaticFiles(directory="build/static"), name="static")
 
 # CORS Setup
 origins = [
-    "http://localhost:3000",  # For local testing
-    "https://your-deployment-url.com",  # Deployed frontend URL
+    "http://localhost:3000",  # Local testing
+    "https://lyricalize-419bc3d24ee4.herokuapp.com",  # Deployed frontend URL
 ]
 
 app.add_middleware(
@@ -52,15 +53,17 @@ def get_spotify_oauth(session_id: str):
         client_secret=SPOTIFY_CLIENT_SECRET,
         redirect_uri=REDIRECT_URI,
         scope="user-top-read",
-        cache_path=f".spotify_cache_{session_id}"
+        cache_path=f".spotify_cache_{session_id}"  # Separate cache per session
     )
 
 # Utility: Get Spotify Client
 def get_spotify_client(session_id: str):
     sp_oauth = get_spotify_oauth(session_id)
     token_info = sp_oauth.get_cached_token()
+
     if not token_info or sp_oauth.is_token_expired(token_info):
         raise Exception("Spotify token expired or missing. Please log in again.")
+
     return spotipy.Spotify(auth=token_info["access_token"])
 
 # Utility: Search for Lyrics
@@ -132,14 +135,20 @@ async def get_word_frequencies(request: Request):
 
         return StreamingResponse(word_stream(), media_type="text/event-stream")
     except Exception as e:
-        return {"error": str(e)}
+        print(f"Error in /api/word-frequencies: {e}")
+        return JSONResponse(content={"error": str(e)}, status_code=500)
 
 # Spotify Login Endpoint
 @app.get("/api/login")
 def spotify_login(request: Request):
-    session_id = request.session.get("session_id", "default_user")
+    # Generate a unique session ID if not already present
+    if "session_id" not in request.session:
+        request.session["session_id"] = str(uuid4())
+
+    session_id = request.session["session_id"]
     sp_oauth = get_spotify_oauth(session_id)
     auth_url = sp_oauth.get_authorize_url()
+
     return {"auth_url": auth_url}
 
 # Spotify Callback Endpoint
@@ -147,20 +156,33 @@ def spotify_login(request: Request):
 def callback(request: Request, code: str):
     session_id = request.session.get("session_id", "default_user")
     sp_oauth = get_spotify_oauth(session_id)
+
     try:
+        # Exchange authorization code for an access token
         token_info = sp_oauth.get_access_token(code, as_dict=True)
-        request.session["spotify_token"] = token_info["access_token"]
-        return RedirectResponse(url="/")
+
+        # Store token info in the session
+        request.session["spotify_token"] = token_info
+
+        # Redirect back to the frontend
+        return RedirectResponse(url="https://your-deployment-url.com/loading")
     except Exception as e:
-        return {"error": f"Authentication failed: {str(e)}"}
+        print(f"Error in /callback: {e}")
+        return JSONResponse(content={"error": f"Authentication failed: {str(e)}"}, status_code=500)
 
+# Middleware to Ensure Session ID
+@app.middleware("http")
+async def ensure_session_id(request: Request, call_next):
+    if "session_id" not in request.session:
+        request.session["session_id"] = str(uuid4())
+    response = await call_next(request)
+    return response
 
-from fastapi.responses import FileResponse
 # Catch-All Route for React Router
 @app.get("/{full_path:path}")
 def serve_react_catchall(full_path: str):
     if not full_path.startswith("api/"):  # Ensure this doesn’t conflict with API routes
-        return FileResponse("build/index.html")
+        return RedirectResponse(url="/static/index.html")
     return {"error": "React frontend not configured for this path."}
 
 if __name__ == "__main__":
