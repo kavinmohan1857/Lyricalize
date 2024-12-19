@@ -78,4 +78,12 @@ function LoadingPage() {
             width: `${(progress / totalSongs) * 100}%`,
             height: "100%",
             backgroundColor: "#1db954",
-            transiti
+            transition: "width 0.3s ease",
+          }}
+        ></div>
+      </div>
+    </div>
+  );
+}
+
+export default LoadingPage;
