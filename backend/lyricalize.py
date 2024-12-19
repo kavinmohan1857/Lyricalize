@@ -1,17 +1,16 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, Depends
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse, FileResponse, RedirectResponse
+from fastapi.responses import StreamingResponse, RedirectResponse
+from starlette.middleware.sessions import SessionMiddleware
 from collections import Counter
 from nltk.corpus import stopwords
 from bs4 import BeautifulSoup
-from fastapi.staticfiles import StaticFiles
 import nltk
 import os
 import spotipy
 import json
 import requests
 from spotipy.oauth2 import SpotifyOAuth
-import uvicorn
 import asyncio
 
 nltk.download("stopwords")
@@ -19,13 +18,16 @@ nltk.download("stopwords")
 # FastAPI app setup
 app = FastAPI()
 
-# Serve React static files
-app.mount("/static", StaticFiles(directory="build/static"), name="static")
+# Add session middleware for user-specific data
+app.add_middleware(SessionMiddleware, secret_key="your_secret_key")
+
+# Serve React static files (if applicable)
+# app.mount("/static", StaticFiles(directory="build/static"), name="static")
 
 # CORS Setup
 origins = [
     "http://localhost:3000",  # For local testing
-    "https://lyricalize-419bc3d24ee4.herokuapp.com",  # Deployed frontend
+    "https://your-deployment-url.com",  # Deployed frontend URL
 ]
 
 app.add_middleware(
@@ -33,7 +35,6 @@ app.add_middleware(
     allow_origins=origins,
     allow_methods=["*"],
     allow_headers=["*"],
-    expose_headers=["Content-Type"],
 )
 
 # Environment variables
@@ -43,21 +44,22 @@ SPOTIFY_CLIENT_SECRET = os.getenv("SPOTIFY_CLIENT_SECRET")
 REDIRECT_URI = os.getenv("REDIRECT_URI", "http://localhost:8000/callback")
 HEADERS = {"Authorization": f"Bearer {GENIUS_ACCESS_TOKEN}"}
 
-# Spotify OAuth setup
-scope = "user-top-read"
-sp_oauth = SpotifyOAuth(
-    client_id=SPOTIFY_CLIENT_ID,
-    client_secret=SPOTIFY_CLIENT_SECRET,
-    redirect_uri=REDIRECT_URI,
-    scope=scope,
-    cache_path=".spotify_cache",
-)
+# Spotify OAuth setup (per user session)
+def get_spotify_oauth(session_id: str):
+    return SpotifyOAuth(
+        client_id=SPOTIFY_CLIENT_ID,
+        client_secret=SPOTIFY_CLIENT_SECRET,
+        redirect_uri=REDIRECT_URI,
+        scope="user-top-read",
+        cache_path=f".spotify_cache_{session_id}"
+    )
 
 # Utility: Get Spotify Client
-def get_spotify_client():
+def get_spotify_client(session_id: str):
+    sp_oauth = get_spotify_oauth(session_id)
     token_info = sp_oauth.get_cached_token()
     if not token_info or sp_oauth.is_token_expired(token_info):
-        token_info = sp_oauth.refresh_access_token(token_info["refresh_token"])
+        raise Exception("Spotify token expired or missing. Please log in again.")
     return spotipy.Spotify(auth=token_info["access_token"])
 
 # Utility: Search for Lyrics
@@ -71,7 +73,7 @@ def search_lyrics(title, artist):
     if response.status_code != 200:
         return None
 
-    hits = response.json()["response"]["hits"]
+    hits = response.json().get("response", {}).get("hits", [])
     for hit in hits:
         if artist.lower() in hit["result"]["primary_artist"]["name"].lower():
             song_url = hit["result"]["url"]
@@ -100,53 +102,54 @@ def filter_stopwords(lyrics):
     ]
 
 # Endpoint: Stream Word Frequencies
-@app.get("/api/word-frequencies")
-async def get_word_frequencies_get():
-    return await get_word_frequencies()
-
-# Endpoint: Stream Word Frequencies
 @app.post("/api/word-frequencies")
-async def get_word_frequencies():
-    sp = get_spotify_client()
-    top_songs = [
-        {"title": track["name"], "artist": track["artists"][0]["name"]}
-        for track in sp.current_user_top_tracks(limit=50, time_range="medium_term")["items"]
-    ]
+async def get_word_frequencies(request: Request):
+    session_id = request.session.get("session_id", "default_user")
+    try:
+        sp = get_spotify_client(session_id)
+        top_songs = [
+            {"title": track["name"], "artist": track["artists"][0]["name"]}
+            for track in sp.current_user_top_tracks(limit=50, time_range="medium_term")["items"]
+        ]
 
-    async def word_stream():
-        word_count = Counter()
-        for idx, song in enumerate(top_songs, start=1):
-            try:
-                lyrics = search_lyrics(song["title"], song["artist"])
-                if lyrics:
-                    filtered_words = filter_stopwords(lyrics)
-                    word_count.update(filtered_words)
-                    yield f"data: {json.dumps({'song': song['title'], 'progress': idx, 'total': len(top_songs)})}\n\n"
-                else:
-                    yield f"data: {json.dumps({'song': song['title'], 'progress': idx, 'error': 'No lyrics'})}\n\n"
-                await asyncio.sleep(0.1)
-            except Exception as e:
-                yield f"data: {json.dumps({'song': song['title'], 'error': str(e)})}\n\n"
+        async def word_stream():
+            word_count = Counter()
+            for idx, song in enumerate(top_songs, start=1):
+                try:
+                    lyrics = search_lyrics(song["title"], song["artist"])
+                    if lyrics:
+                        filtered_words = filter_stopwords(lyrics)
+                        word_count.update(filtered_words)
+                        yield f"data: {json.dumps({'song': song['title'], 'artist': song['artist'], 'progress': idx, 'total': len(top_songs)})}\n\n"
+                    else:
+                        yield f"data: {json.dumps({'song': song['title'], 'artist': song['artist'], 'progress': idx, 'error': 'No lyrics'})}\n\n"
+                    await asyncio.sleep(0.1)
+                except Exception as e:
+                    yield f"data: {json.dumps({'song': song['title'], 'error': str(e)})}\n\n"
 
-        yield f"data: {json.dumps({'song': song['title'], 'artist': song['artist'], 'progress': idx, 'total': len(top_songs)})}\n\n"
+            yield f"data: {json.dumps({'status': 'complete', 'top_words': word_count.most_common(50)})}\n\n"
 
-
-    return StreamingResponse(word_stream(), media_type="text/event-stream")
+        return StreamingResponse(word_stream(), media_type="text/event-stream")
+    except Exception as e:
+        return {"error": str(e)}
 
 # Spotify Login Endpoint
 @app.get("/api/login")
-def spotify_login():
+def spotify_login(request: Request):
+    session_id = request.session.get("session_id", "default_user")
+    sp_oauth = get_spotify_oauth(session_id)
     auth_url = sp_oauth.get_authorize_url()
     return {"auth_url": auth_url}
 
 # Spotify Callback Endpoint
 @app.get("/callback")
-def callback(code: str):
+def callback(request: Request, code: str):
+    session_id = request.session.get("session_id", "default_user")
+    sp_oauth = get_spotify_oauth(session_id)
     try:
         token_info = sp_oauth.get_access_token(code, as_dict=True)
-        access_token = token_info["access_token"]
-        redirect_url = f"{os.getenv('FRONTEND_URL', 'http://localhost:3000')}/loading?access_token={access_token}"
-        return RedirectResponse(url=redirect_url)
+        request.session["spotify_token"] = token_info["access_token"]
+        return RedirectResponse(url="/")
     except Exception as e:
         return {"error": f"Authentication failed: {str(e)}"}
 
@@ -155,9 +158,10 @@ def callback(code: str):
 def serve_react_catchall(full_path: str):
     if full_path.startswith("api/"):
         return {"detail": "Not Found"}
-    return FileResponse("build/index.html")
+    return {"error": "React frontend not configured for this path."}
 
 if __name__ == "__main__":
     import uvicorn
+
     port = int(os.environ.get("PORT", 8000))  # Default to 8000 if PORT is not set
     uvicorn.run(app, host="0.0.0.0", port=port)
