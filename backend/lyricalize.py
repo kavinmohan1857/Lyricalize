@@ -128,7 +128,8 @@ async def get_word_frequencies():
             except Exception as e:
                 yield f"data: {json.dumps({'song': song['title'], 'error': str(e)})}\n\n"
 
-        yield f"data: {json.dumps({'status': 'complete', 'top_words': word_count.most_common(50)})}\n\n"
+        yield f"data: {json.dumps({'song': song['title'], 'artist': song['artist'], 'progress': idx, 'total': len(top_songs)})}\n\n"
+
 
     return StreamingResponse(word_stream(), media_type="text/event-stream")
 
