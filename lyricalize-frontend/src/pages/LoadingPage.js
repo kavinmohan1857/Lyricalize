@@ -13,6 +13,7 @@ function LoadingPage() {
   useEffect(() => {
     const fetchWordFrequencies = async () => {
       const token = localStorage.getItem("jwt_token");
+      console.log("Fetching word frequencies from:", `${API_URL}/api/word-frequencies`);
 
       if (!token) {
         setError("Authorization token is missing. Please log in again.");
