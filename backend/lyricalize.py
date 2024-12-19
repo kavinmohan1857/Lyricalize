@@ -186,8 +186,8 @@ def callback(code: str = None, token: str = None):
         # Exchange authorization code for an access token
         sp_oauth.get_access_token(code, as_dict=True)
 
-        # Redirect back to the frontend
-        return RedirectResponse(url="https://lyricalize-419bc3d24ee4.herokuapp.com/")
+        # Redirect back to the frontend's loading page
+        return RedirectResponse(url="https://lyricalize-419bc3d24ee4.herokuapp.com/loadingpage")
     except Exception as e:
         print(f"Error in /callback: {e}")
         return JSONResponse(content={"error": f"Authentication failed: {str(e)}"}, status_code=500)

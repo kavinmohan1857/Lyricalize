@@ -11,34 +11,54 @@ function LoadingPage() {
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    const eventSource = new EventSource(`${API_URL}/api/word-frequencies`);
+    const fetchWordFrequencies = async () => {
+      try {
+        const response = await fetch(`${API_URL}/api/word-frequencies`, {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem("token")}`, // Replace with your token logic
+          },
+        });
 
-    eventSource.onmessage = (event) => {
-      const data = JSON.parse(event.data);
-      console.log("Received data:", data); // Debug
+        if (!response.ok) {
+          throw new Error("Failed to fetch word frequencies");
+        }
 
-      if (data.status === "complete") {
-        console.log("Processing complete:", data.top_words); // Debug
-        setWordMap(data.top_words);
-        setIsComplete(true);
-        eventSource.close();
-      } else if (data.song) {
-        setCurrentSong(data.song);
-        setCurrentArtist(data.artist || "Unknown Artist");
-        setProgress(data.progress);
-        setTotalSongs(data.total || 50);
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder("utf-8");
+        let buffer = "";
+
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+          const events = buffer.split("\n\n");
+          for (const event of events) {
+            if (!event.trim()) continue;
+            const data = JSON.parse(event.replace(/^data: /, ""));
+            console.log("Received data:", data); // Debug
+
+            if (data.status === "complete") {
+              console.log("Processing complete:", data.top_words); // Debug
+              setWordMap(data.top_words);
+              setIsComplete(true);
+              return;
+            } else if (data.song) {
+              setCurrentSong(data.song);
+              setCurrentArtist(data.artist || "Unknown Artist");
+              setProgress(data.progress);
+              setTotalSongs(data.total || 50);
+            }
+          }
+          buffer = buffer.slice(buffer.lastIndexOf("\n\n") + 2);
+        }
+      } catch (err) {
+        console.error("Error fetching word frequencies:", err);
+        setError("An error occurred while generating your word map.");
       }
     };
 
-    eventSource.onerror = (error) => {
-      console.error("Error fetching word frequencies:", error);
-      setError("An error occurred while generating your word map.");
-      eventSource.close();
-    };
-
-    return () => {
-      eventSource.close();
-    };
+    fetchWordFrequencies();
   }, []);
 
   if (error) {
@@ -92,6 +112,10 @@ function LoadingPage() {
         }}
       >
         <div
+          role="progressbar"
+          aria-valuenow={(progress / totalSongs) * 100}
+          aria-valuemin="0"
+          aria-valuemax="100"
           style={{
             width: `${(progress / totalSongs) * 100}%`,
             height: "100%",
