@@ -7,23 +7,24 @@ function LoadingPage() {
   const [progress, setProgress] = useState(0);
   const [totalSongs, setTotalSongs] = useState(50);
   const [wordMap, setWordMap] = useState([]);
-  const [isComplete, setIsComplete] = useState(false); // Track when processing is complete
+  const [isComplete, setIsComplete] = useState(false);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
     const eventSource = new EventSource(`${API_URL}/api/word-frequencies`);
 
     eventSource.onmessage = (event) => {
       const data = JSON.parse(event.data);
+      console.log("Received data:", data); // Debug
 
       if (data.status === "complete") {
-        // When processing is complete, update the state with top words
+        console.log("Processing complete:", data.top_words); // Debug
         setWordMap(data.top_words);
         setIsComplete(true);
         eventSource.close();
       } else if (data.song) {
-        // Update progress, current song, and artist
         setCurrentSong(data.song);
-        setCurrentArtist(data.artist || "Unknown Artist"); // Handle missing artist
+        setCurrentArtist(data.artist || "Unknown Artist");
         setProgress(data.progress);
         setTotalSongs(data.total || 50);
       }
@@ -31,6 +32,7 @@ function LoadingPage() {
 
     eventSource.onerror = (error) => {
       console.error("Error fetching word frequencies:", error);
+      setError("An error occurred while generating your word map.");
       eventSource.close();
     };
 
@@ -39,8 +41,16 @@ function LoadingPage() {
     };
   }, []);
 
+  if (error) {
+    return (
+      <div style={{ textAlign: "center", marginTop: "20%" }}>
+        <h2>Error</h2>
+        <p>{error}</p>
+      </div>
+    );
+  }
+
   if (isComplete) {
-    // Render the list of top words when processing is complete
     return (
       <div style={{ textAlign: "center", marginTop: "20%" }}>
         <h2>Top Words from Your Spotify Songs</h2>
@@ -62,7 +72,6 @@ function LoadingPage() {
     );
   }
 
-  // Render progress bar and song info while processing
   return (
     <div style={{ textAlign: "center", marginTop: "20%" }}>
       <h2>Generating your Word Map...</h2>
