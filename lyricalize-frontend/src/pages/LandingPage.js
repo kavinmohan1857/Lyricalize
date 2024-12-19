@@ -12,9 +12,10 @@ function LandingPage() {
         const response = await axios.get(`${API_URL}/api/login`);
         setSpotifyAuthUrl(response.data.auth_url);
 
-        // Store the JWT token in localStorage for future authenticated requests
+        // Store the JWT token in localStorage
         if (response.data.token) {
           localStorage.setItem("jwt_token", response.data.token);
+          console.log("JWT token saved to localStorage:", response.data.token);
         } else {
           console.error("JWT token not received from backend");
         }

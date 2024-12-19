@@ -126,6 +126,8 @@ def filter_stopwords(lyrics):
 # Endpoint: Stream Word Frequencies
 @app.post("/api/word-frequencies")
 async def get_word_frequencies(request: Request):
+    print(f"Incoming headers: {request.headers}")
+    print(f"Request method: {request.method}")
     auth_header = request.headers.get("Authorization")
     if not auth_header or not auth_header.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Authorization header missing or invalid")
