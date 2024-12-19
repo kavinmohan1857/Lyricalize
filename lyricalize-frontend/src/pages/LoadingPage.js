@@ -12,7 +12,7 @@ function LoadingPage() {
 
   useEffect(() => {
     const fetchWordFrequencies = async () => {
-      const token = localStorage.getItem("jwt_token"); // Retrieve the token
+      const token = localStorage.getItem("jwt_token");
 
       if (!token) {
         setError("Authorization token is missing. Please log in again.");
@@ -30,7 +30,8 @@ function LoadingPage() {
           if (response.status === 401) {
             throw new Error("Unauthorized. Please log in again.");
           }
-          throw new Error("Failed to fetch word frequencies.");
+          const errorData = await response.json();
+          throw new Error(errorData.detail || "Failed to fetch word frequencies.");
         }
 
         const reader = response.body.getReader();
@@ -43,27 +44,33 @@ function LoadingPage() {
 
           buffer += decoder.decode(value, { stream: true });
           const events = buffer.split("\n\n");
+
           for (const event of events) {
             if (!event.trim()) continue;
-            const data = JSON.parse(event.replace(/^data: /, ""));
-            console.log("Received data:", data); // Debug
 
-            if (data.status === "complete") {
-              console.log("Processing complete:", data.top_words); // Debug
-              setWordMap(data.top_words);
-              setIsComplete(true);
-              return;
-            } else if (data.song) {
-              setCurrentSong(data.song);
-              setCurrentArtist(data.artist || "Unknown Artist");
-              setProgress(data.progress);
-              setTotalSongs(data.total || 50);
+            try {
+              const data = JSON.parse(event.replace(/^data: /, ""));
+              console.log("Received data:", data);
+
+              if (data.status === "complete") {
+                setWordMap(data.top_words);
+                setIsComplete(true);
+                return;
+              } else if (data.song) {
+                setCurrentSong(data.song);
+                setCurrentArtist(data.artist || "Unknown Artist");
+                setProgress(data.progress);
+                setTotalSongs(data.total || 50);
+              }
+            } catch (parseError) {
+              console.error("Error parsing event data:", parseError);
             }
           }
+
           buffer = buffer.slice(buffer.lastIndexOf("\n\n") + 2);
         }
       } catch (err) {
-        console.error("Error fetching word frequencies:", err);
+        console.error("Error fetching word frequencies:", err.message);
         setError(err.message || "An error occurred while generating your word map.");
       }
     };
