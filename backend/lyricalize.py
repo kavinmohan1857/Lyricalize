@@ -175,7 +175,10 @@ def spotify_login():
 
 # Spotify Callback Endpoint
 @app.get("/callback")
-def callback(code: str, token: str):
+def callback(code: str = None, token: str = None):
+    if not code or not token:
+        raise HTTPException(status_code=422, detail="Missing 'code' or 'token' query parameter")
+
     user = decode_jwt(token)
     sp_oauth = get_spotify_oauth(user["user_id"])
 
@@ -189,7 +192,7 @@ def callback(code: str, token: str):
         print(f"Error in /callback: {e}")
         return JSONResponse(content={"error": f"Authentication failed: {str(e)}"}, status_code=500)
 
-# Catch-All Route for React Router
+# Catch-all Route for React Router
 @app.get("/{full_path:path}")
 def serve_react_catchall(full_path: str):
     if not full_path.startswith("api/"):
