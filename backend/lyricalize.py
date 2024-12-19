@@ -1,31 +1,30 @@
 from fastapi import FastAPI, Request, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse, RedirectResponse, JSONResponse
+from fastapi.responses import StreamingResponse, RedirectResponse, JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from collections import Counter
-from nltk.corpus import stopwords
-from bs4 import BeautifulSoup
+from pathlib import Path
 from jose import JWTError, jwt
 from uuid import uuid4
-import nltk
 import os
 import spotipy
 import json
 import requests
 import asyncio
 from spotipy.oauth2 import SpotifyOAuth
+from bs4 import BeautifulSoup
+import nltk
 
-nltk.download("stopwords")
+# Ensure stopwords are available
+if not os.path.exists(os.path.join("nltk_data", "corpora", "stopwords")):
+    nltk.download("stopwords")
+from nltk.corpus import stopwords
 
 # FastAPI app setup
 app = FastAPI()
 
 # CORS Setup
-origins = [
-    "http://localhost:3000",  # Local testing
-    "https://lyricalize-419bc3d24ee4.herokuapp.com",  # Deployed frontend URL
-]
-
+origins = os.getenv("CORS_ORIGINS", "http://localhost:3000,https://lyricalize-419bc3d24ee4.herokuapp.com").split(",")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
@@ -33,7 +32,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Serve React static files (if applicable)
+# Serve React static files
 app.mount("/static", StaticFiles(directory="build/static"), name="static")
 
 # Environment variables
@@ -41,11 +40,12 @@ GENIUS_ACCESS_TOKEN = os.getenv("GENIUS_ACCESS_TOKEN")
 SPOTIFY_CLIENT_ID = os.getenv("SPOTIFY_CLIENT_ID")
 SPOTIFY_CLIENT_SECRET = os.getenv("SPOTIFY_CLIENT_SECRET")
 REDIRECT_URI = os.getenv("REDIRECT_URI", "http://localhost:8000/callback")
+SECRET_KEY = os.getenv("SECRET_KEY", "default_secret_key")
+ALGORITHM = "HS256"
 HEADERS = {"Authorization": f"Bearer {GENIUS_ACCESS_TOKEN}"}
 
-# JWT Configurations
-SECRET_KEY = "your_secret_key"
-ALGORITHM = "HS256"
+if not all([GENIUS_ACCESS_TOKEN, SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET, REDIRECT_URI]):
+    raise RuntimeError("Missing required environment variables.")
 
 # Utility: Generate JWT Token
 def create_jwt(data: dict, expires_in: int = 3600):
@@ -77,8 +77,10 @@ def get_spotify_client(user_id: str):
     sp_oauth = get_spotify_oauth(user_id)
     token_info = sp_oauth.get_cached_token()
 
-    if not token_info or sp_oauth.is_token_expired(token_info):
-        raise HTTPException(status_code=401, detail="Spotify token expired or missing. Please log in again.")
+    if not token_info:
+        raise HTTPException(status_code=401, detail="Spotify token missing. Please log in.")
+    if sp_oauth.is_token_expired(token_info):
+        token_info = sp_oauth.refresh_access_token(token_info["refresh_token"])
 
     return spotipy.Spotify(auth=token_info["access_token"])
 
@@ -190,19 +192,15 @@ def callback(code: str, token: str):
 # Catch-All Route for React Router
 @app.get("/{full_path:path}")
 def serve_react_catchall(full_path: str):
-    if not full_path.startswith("api/"):  # Ensure this doesn’t conflict with API routes
-        return RedirectResponse(url="/static/index.html")
+    if not full_path.startswith("api/"):
+        index_file = Path("build/index.html")
+        if not index_file.exists():
+            raise HTTPException(status_code=404, detail="React build/index.html not found.")
+        return FileResponse(index_file)
     return {"error": f"Invalid path: {full_path}"}
-
-
-from fastapi.responses import FileResponse
-
-@app.get("/")
-async def serve_react_index():
-    return FileResponse("build/index.html")
 
 if __name__ == "__main__":
     import uvicorn
 
-    port = int(os.environ.get("PORT", 8000))  # Default to 8000 if PORT is not set
+    port = int(os.environ.get("PORT", 8000))
     uvicorn.run(app, host="0.0.0.0", port=port)
