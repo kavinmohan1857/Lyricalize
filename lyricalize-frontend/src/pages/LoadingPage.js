@@ -2,7 +2,6 @@ import React, { useEffect, useState } from "react"; // Import React and hooks
 import API_URL from "../config"; // Import API_URL from your config file
 
 function LoadingPage() {
-  // State hooks
   const [currentSong, setCurrentSong] = useState("Starting...");
   const [currentArtist, setCurrentArtist] = useState("");
   const [progress, setProgress] = useState(0);
@@ -11,10 +10,34 @@ function LoadingPage() {
   const [isComplete, setIsComplete] = useState(false);
   const [error, setError] = useState(null);
 
-  // Effect to fetch word frequencies
+  // Verify and log the token saving process
+  useEffect(() => {
+    const checkAndSaveToken = () => {
+      // Get token from query params if not in localStorage
+      const queryParams = new URLSearchParams(window.location.search);
+      const tokenFromURL = queryParams.get("token");
+
+      if (tokenFromURL) {
+        localStorage.setItem("jwt_token", tokenFromURL);
+        console.log("JWT token extracted from URL and saved:", tokenFromURL);
+      }
+
+      const savedToken = localStorage.getItem("jwt_token");
+      if (savedToken) {
+        console.log("JWT token found in localStorage:", savedToken);
+      } else {
+        console.error("JWT token is missing. Redirecting to login...");
+        setError("Authorization token is missing. Please log in again.");
+      }
+    };
+
+    checkAndSaveToken();
+  }, []);
+
+  // Fetch word frequencies
   useEffect(() => {
     const fetchWordFrequencies = async () => {
-      const token = localStorage.getItem("jwt_token"); // Retrieve the token
+      const token = localStorage.getItem("jwt_token");
 
       if (!token) {
         setError("Authorization token is missing. Please log in again.");
@@ -23,10 +46,10 @@ function LoadingPage() {
 
       try {
         const response = await fetch(`${API_URL}/api/word-frequencies`, {
-          method: "POST", // Ensure this is POST
+          method: "POST",
           headers: {
-            "Content-Type": "application/json", // Explicitly set content type
-            Authorization: `Bearer ${token}`, // Pass the token in the header
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
           },
         });
 
@@ -50,10 +73,10 @@ function LoadingPage() {
           for (const event of events) {
             if (!event.trim()) continue;
             const data = JSON.parse(event.replace(/^data: /, ""));
-            console.log("Received data:", data); // Debug
+            console.log("Received data:", data);
 
             if (data.status === "complete") {
-              console.log("Processing complete:", data.top_words); // Debug
+              console.log("Processing complete:", data.top_words);
               setWordMap(data.top_words);
               setIsComplete(true);
               return;

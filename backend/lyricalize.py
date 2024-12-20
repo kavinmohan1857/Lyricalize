@@ -173,8 +173,8 @@ def spotify_login():
     sp_oauth = get_spotify_oauth(user_id)
     auth_url = sp_oauth.get_authorize_url()
 
-    # Append the token to the callback URL
-    return {"auth_url": f"{auth_url}&state={token}"}
+    # Return both auth_url and token
+    return {"auth_url": auth_url, "token": token}
 
 
 # Spotify Callback Endpoint
