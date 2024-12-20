@@ -159,7 +159,7 @@ def callback(code: str = None, state: str = None):
         # Save token info
         token_store[user_id] = token_info
 
-        return RedirectResponse(url="https://https://lyricalize-419bc3d24ee4.herokuapp.com/loadinpage")
+        return RedirectResponse(url="https://https://lyricalize-419bc3d24ee4.herokuapp.com/loadingpage")
     except Exception as e:
         print(f"Error in /callback: {e}")
         return JSONResponse(content={"error": f"Authentication failed: {str(e)}"}, status_code=500)
