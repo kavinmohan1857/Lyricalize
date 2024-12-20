@@ -140,6 +140,11 @@ async def get_word_frequencies_get(request: Request):
         ]
 
         word_count = Counter()
+        lyrics = search_lyrics("Shape of You", "Ed Sheeran")
+        if lyrics:
+            filtered_words = filter_stopwords(lyrics)
+            word_count.update(filtered_words)
+
         for song in top_songs:
             lyrics = search_lyrics(song["title"], song["artist"])
             if lyrics:
