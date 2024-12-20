@@ -80,11 +80,19 @@ def refresh_spotify_token(user_id: str):
     sp_oauth = get_spotify_oauth(user_id)
     token_info = token_store.get(user_id)
 
-    if not token_info or sp_oauth.is_token_expired(token_info):
-        if not token_info or "refresh_token" not in token_info:
-            raise HTTPException(status_code=401, detail="Spotify token missing. Please log in.")
+    if not token_info:
+        print(f"No token found for user {user_id}.")
+        raise HTTPException(status_code=401, detail="Spotify token missing. Please log in.")
+
+    if sp_oauth.is_token_expired(token_info):
+        print(f"Token expired for user {user_id}. Refreshing token...")
+        if "refresh_token" not in token_info:
+            raise HTTPException(status_code=401, detail="No refresh token available. Please log in.")
         token_info = sp_oauth.refresh_access_token(token_info["refresh_token"])
         token_store[user_id] = token_info
+        print(f"Token refreshed for user {user_id}: {token_info}")
+    else:
+        print(f"Token is valid for user {user_id}.")
 
     return token_info
 
@@ -156,8 +164,12 @@ def callback(code: str = None, state: str = None):
         sp_oauth = get_spotify_oauth(user_id)
         token_info = sp_oauth.get_access_token(code, as_dict=True)
 
-        # Save token info
-        token_store[user_id] = token_info
+        # Save token info in the token_store
+        if token_info:
+            token_store[user_id] = token_info
+            print(f"Token saved for user {user_id}: {token_info}")
+        else:
+            raise HTTPException(status_code=500, detail="Failed to retrieve Spotify token.")
 
         return RedirectResponse(url="https://lyricalize-419bc3d24ee4.herokuapp.com/loadingpage")
     except Exception as e:
@@ -181,6 +193,7 @@ async def get_word_frequencies(request: Request):
             for track in sp.current_user_top_tracks(limit=50, time_range="medium_term")["items"]
         ]
 
+        # Stream word frequencies (existing logic)
         async def word_stream():
             word_count = Counter()
             for idx, song in enumerate(top_songs, start=1):
