@@ -24,7 +24,7 @@ from nltk.corpus import stopwords
 app = FastAPI()
 
 # CORS Setup
-origins = os.getenv("CORS_ORIGINS", "http://localhost:3000,https://lyricalize.herokuapp.com").split(",")
+origins = os.getenv("CORS_ORIGINS", "http://localhost:3000,https://https://lyricalize-419bc3d24ee4.herokuapp.com/").split(",")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
@@ -159,7 +159,7 @@ def callback(code: str = None, state: str = None):
         # Save token info
         token_store[user_id] = token_info
 
-        return RedirectResponse(url="https://lyricalize.herokuapp.com/loadingpage")
+        return RedirectResponse(url="https://https://lyricalize-419bc3d24ee4.herokuapp.com/loadinpage")
     except Exception as e:
         print(f"Error in /callback: {e}")
         return JSONResponse(content={"error": f"Authentication failed: {str(e)}"}, status_code=500)
