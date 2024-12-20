@@ -24,7 +24,7 @@ from nltk.corpus import stopwords
 app = FastAPI()
 
 # CORS Setup
-origins = os.getenv("CORS_ORIGINS", "http://localhost:3000,https://lyricalize-419bc3d24ee4.herokuapp.com").split(",")
+origins = os.getenv("CORS_ORIGINS", "http://localhost:3000,https://lyricalize.herokuapp.com").split(",")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
@@ -46,6 +46,9 @@ HEADERS = {"Authorization": f"Bearer {GENIUS_ACCESS_TOKEN}"}
 
 if not all([GENIUS_ACCESS_TOKEN, SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET, REDIRECT_URI]):
     raise RuntimeError("Missing required environment variables.")
+
+# In-memory token store (replace with persistent storage for production)
+token_store = {}
 
 # Utility: Generate JWT Token
 def create_jwt(data: dict, expires_in: int = 3600):
@@ -72,16 +75,22 @@ def get_spotify_oauth(user_id: str):
         cache_path=f".spotify_cache_{user_id}"
     )
 
+# Utility: Refresh Spotify Token
+def refresh_spotify_token(user_id: str):
+    sp_oauth = get_spotify_oauth(user_id)
+    token_info = token_store.get(user_id)
+
+    if not token_info or sp_oauth.is_token_expired(token_info):
+        if not token_info or "refresh_token" not in token_info:
+            raise HTTPException(status_code=401, detail="Spotify token missing. Please log in.")
+        token_info = sp_oauth.refresh_access_token(token_info["refresh_token"])
+        token_store[user_id] = token_info
+
+    return token_info
+
 # Utility: Get Spotify Client
 def get_spotify_client(user_id: str):
-    sp_oauth = get_spotify_oauth(user_id)
-    token_info = sp_oauth.get_cached_token()
-
-    if not token_info:
-        raise HTTPException(status_code=401, detail="Spotify token missing. Please log in.")
-    if sp_oauth.is_token_expired(token_info):
-        token_info = sp_oauth.refresh_access_token(token_info["refresh_token"])
-
+    token_info = refresh_spotify_token(user_id)
     return spotipy.Spotify(auth=token_info["access_token"])
 
 # Utility: Search for Lyrics
@@ -122,50 +131,42 @@ def filter_stopwords(lyrics):
         for word in lyrics.split()
         if word.lower().strip(".,!?\"'()[]") not in stop_words
     ]
-# Endpoint: Get Word Frequencies (GET Version)
-@app.get("/api/word-frequencies")
-async def get_word_frequencies_get(request: Request):
-    auth_header = request.headers.get("Authorization")
-    if not auth_header or not auth_header.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="Authorization header missing or invalid")
 
-    token = auth_header.split(" ")[1]
-    user = decode_jwt(token)
+# Endpoint: Spotify Login
+@app.get("/api/login")
+def spotify_login():
+    user_id = str(uuid4())
+    token = create_jwt({"user_id": user_id})
+
+    sp_oauth = get_spotify_oauth(user_id)
+    auth_url = sp_oauth.get_authorize_url()
+
+    return {"auth_url": f"{auth_url}&state={token}", "token": token}
+
+# Spotify Callback Endpoint
+@app.get("/callback")
+def callback(code: str = None, state: str = None):
+    if not code or not state:
+        raise HTTPException(status_code=422, detail="Missing 'code' or 'state' query parameter")
 
     try:
-        sp = get_spotify_client(user["user_id"])
-        top_songs = [
-            {"title": track["name"], "artist": track["artists"][0]["name"]}
-            for track in sp.current_user_top_tracks(limit=50, time_range="medium_term")["items"]
-        ]
+        user = decode_jwt(state)
+        user_id = user["user_id"]
 
-        word_count = Counter()
-        lyrics = search_lyrics("Shape of You", "Ed Sheeran")
-        if lyrics:
-            filtered_words = filter_stopwords(lyrics)
-            word_count.update(filtered_words)
+        sp_oauth = get_spotify_oauth(user_id)
+        token_info = sp_oauth.get_access_token(code, as_dict=True)
 
-        for song in top_songs:
-            lyrics = search_lyrics(song["title"], song["artist"])
-            if lyrics:
-                filtered_words = filter_stopwords(lyrics)
-                word_count.update(filtered_words)
+        # Save token info
+        token_store[user_id] = token_info
 
-        # Return the top 50 most common words
-        return {
-            "status": "complete",
-            "top_words": word_count.most_common(50),
-            "processed_songs": len(top_songs),
-        }
+        return RedirectResponse(url="https://lyricalize.herokuapp.com/loadingpage")
     except Exception as e:
-        print(f"Error in GET /api/word-frequencies: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        print(f"Error in /callback: {e}")
+        return JSONResponse(content={"error": f"Authentication failed: {str(e)}"}, status_code=500)
 
-# Endpoint: Stream Word Frequencies
+# Endpoint: Get Word Frequencies
 @app.post("/api/word-frequencies")
 async def get_word_frequencies(request: Request):
-    print(f"Incoming headers: {request.headers}")
-    print(f"Request method: {request.method}")
     auth_header = request.headers.get("Authorization")
     if not auth_header or not auth_header.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Authorization header missing or invalid")
@@ -202,51 +203,9 @@ async def get_word_frequencies(request: Request):
         print(f"Error in /api/word-frequencies: {e}")
         return JSONResponse(content={"error": str(e)}, status_code=500)
 
-# Spotify Login Endpoint
-@app.get("/api/login")
-def spotify_login():
-    user_id = str(uuid4())
-    token = create_jwt({"user_id": user_id})
-
-    sp_oauth = get_spotify_oauth(user_id)
-    auth_url = sp_oauth.get_authorize_url()
-
-    # Append JWT token as the state parameter
-    return {"auth_url": f"{auth_url}&state={token}", "token": token}
-
-
-@app.get("/callback")
-def callback(code: str = None, state: str = None):
-    print(f"State received: {state}")
-
-    # Check for missing query parameters
-    if not code or not state:
-        raise HTTPException(status_code=422, detail="Missing 'code' or 'state' query parameter")
-
-    try:
-        # Decode and validate the JWT token in state
-        user = decode_jwt(state)
-
-        sp_oauth = get_spotify_oauth(user["user_id"])
-
-        # Exchange authorization code for an access token
-        sp_oauth.get_access_token(code, as_dict=True)
-
-        # Redirect back to the frontend's loading page
-        return RedirectResponse(url="https://lyricalize-419bc3d24ee4.herokuapp.com/loadingpage")
-    except JWTError:
-        return JSONResponse(content={"error": "Invalid or expired state parameter"}, status_code=401)
-    except Exception as e:
-        print(f"Error in /callback: {e}")
-        return JSONResponse(content={"error": f"Authentication failed: {str(e)}"}, status_code=500)
-
-# Catch-all Route for React Router
+# Catch-All Route
 @app.get("/{full_path:path}")
 def serve_react_catchall(full_path: str):
-    # Exclude known API routes from the catch-all logic
-    if full_path.startswith("api/word-frequencies"):
-        raise HTTPException(status_code=404, detail="API path not handled properly")
-    
     if not full_path.startswith("api/"):
         index_file = Path("build/index.html")
         if not index_file.exists():
