@@ -101,32 +101,54 @@ def get_spotify_client(user_id: str):
     token_info = refresh_spotify_token(user_id)
     return spotipy.Spotify(auth=token_info["access_token"])
 
-# Utility: Search for Lyrics
 def search_lyrics(title, artist):
     search_query = f"{title} {artist}"
+    print(f"Searching for lyrics: Title='{title}', Artist='{artist}', Query='{search_query}'")
+    
     response = requests.get(
         "https://api.genius.com/search",
         headers=HEADERS,
         params={"q": search_query},
     )
+
+    print(f"Genius API Response Code: {response.status_code}")
     if response.status_code != 200:
+        print(f"Genius API Error: {response.text}")
         return None
 
     hits = response.json().get("response", {}).get("hits", [])
+    print(f"Genius API Hits: {len(hits)} found for query '{search_query}'")
+
     for hit in hits:
+        print(f"Checking hit: {hit}")
         if artist.lower() in hit["result"]["primary_artist"]["name"].lower():
             song_url = hit["result"]["url"]
+            print(f"Found matching lyrics URL: {song_url}")
             return scrape_lyrics(song_url)
+
+    print("No matching lyrics found.")
     return None
+
 
 # Utility: Scrape Lyrics
 def scrape_lyrics(song_url):
+    print(f"Scraping lyrics from URL: {song_url}")
     try:
         response = requests.get(song_url)
-        if response.status_code == 200:
-            soup = BeautifulSoup(response.text, "html.parser")
-            lyrics_containers = soup.select('div[data-lyrics-container="true"]')
-            return "\n".join([container.get_text() for container in lyrics_containers])
+        print(f"Lyrics Page Response Code: {response.status_code}")
+        if response.status_code != 200:
+            print(f"Lyrics Page Error: {response.text}")
+            return None
+
+        soup = BeautifulSoup(response.text, "html.parser")
+        lyrics_containers = soup.select('div[data-lyrics-container="true"]')
+        if not lyrics_containers:
+            print("No lyrics containers found on the page.")
+            return None
+
+        lyrics = "\n".join([container.get_text() for container in lyrics_containers])
+        print(f"Lyrics scraped successfully: {lyrics[:100]}...")  # Only print first 100 characters
+        return lyrics
     except Exception as e:
         print(f"Error scraping lyrics: {e}")
     return None
@@ -179,6 +201,8 @@ def callback(code: str = None, state: str = None):
 # Endpoint: Get Word Frequencies
 @app.post("/api/word-frequencies")
 async def get_word_frequencies(request: Request):
+    print(f"Incoming Authorization Header: {request.headers.get('Authorization')}")
+    
     auth_header = request.headers.get("Authorization")
     if not auth_header or not auth_header.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Authorization header missing or invalid")
@@ -192,11 +216,12 @@ async def get_word_frequencies(request: Request):
             {"title": track["name"], "artist": track["artists"][0]["name"]}
             for track in sp.current_user_top_tracks(limit=50, time_range="medium_term")["items"]
         ]
+        print(f"Fetched top {len(top_songs)} songs from Spotify.")
 
-        # Stream word frequencies (existing logic)
         async def word_stream():
             word_count = Counter()
             for idx, song in enumerate(top_songs, start=1):
+                print(f"Processing song {idx}/{len(top_songs)}: {song}")
                 try:
                     lyrics = search_lyrics(song["title"], song["artist"])
                     if lyrics:
@@ -204,9 +229,11 @@ async def get_word_frequencies(request: Request):
                         word_count.update(filtered_words)
                         yield f"data: {json.dumps({'song': song['title'], 'artist': song['artist'], 'progress': idx, 'total': len(top_songs)})}\n\n"
                     else:
+                        print(f"No lyrics found for song: {song}")
                         yield f"data: {json.dumps({'song': song['title'], 'artist': song['artist'], 'progress': idx, 'error': 'No lyrics'})}\n\n"
                     await asyncio.sleep(0.1)
                 except Exception as e:
+                    print(f"Error processing song {song}: {e}")
                     yield f"data: {json.dumps({'song': song['title'], 'error': str(e)})}\n\n"
 
             yield f"data: {json.dumps({'status': 'complete', 'top_words': word_count.most_common(50)})}\n\n"
