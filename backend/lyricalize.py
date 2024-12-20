@@ -122,6 +122,39 @@ def filter_stopwords(lyrics):
         for word in lyrics.split()
         if word.lower().strip(".,!?\"'()[]") not in stop_words
     ]
+# Endpoint: Get Word Frequencies (GET Version)
+@app.get("/api/word-frequencies")
+async def get_word_frequencies_get(request: Request):
+    auth_header = request.headers.get("Authorization")
+    if not auth_header or not auth_header.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Authorization header missing or invalid")
+
+    token = auth_header.split(" ")[1]
+    user = decode_jwt(token)
+
+    try:
+        sp = get_spotify_client(user["user_id"])
+        top_songs = [
+            {"title": track["name"], "artist": track["artists"][0]["name"]}
+            for track in sp.current_user_top_tracks(limit=50, time_range="medium_term")["items"]
+        ]
+
+        word_count = Counter()
+        for song in top_songs:
+            lyrics = search_lyrics(song["title"], song["artist"])
+            if lyrics:
+                filtered_words = filter_stopwords(lyrics)
+                word_count.update(filtered_words)
+
+        # Return the top 50 most common words
+        return {
+            "status": "complete",
+            "top_words": word_count.most_common(50),
+            "processed_songs": len(top_songs),
+        }
+    except Exception as e:
+        print(f"Error in GET /api/word-frequencies: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 # Endpoint: Stream Word Frequencies
 @app.post("/api/word-frequencies")
@@ -205,6 +238,10 @@ def callback(code: str = None, state: str = None):
 # Catch-all Route for React Router
 @app.get("/{full_path:path}")
 def serve_react_catchall(full_path: str):
+    # Exclude known API routes from the catch-all logic
+    if full_path.startswith("api/word-frequencies"):
+        raise HTTPException(status_code=404, detail="API path not handled properly")
+    
     if not full_path.startswith("api/"):
         index_file = Path("build/index.html")
         if not index_file.exists():
