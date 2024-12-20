@@ -173,18 +173,20 @@ def spotify_login():
     sp_oauth = get_spotify_oauth(user_id)
     auth_url = sp_oauth.get_authorize_url()
 
-    # Return both auth_url and token
-    return {"auth_url": auth_url, "token": token}
+    # Append JWT token as the state parameter
+    return {"auth_url": f"{auth_url}&state={token}", "token": token}
 
 
-# Spotify Callback Endpoint
 @app.get("/callback")
 def callback(code: str = None, state: str = None):
+    print(f"State received: {state}")
+
+    # Check for missing query parameters
     if not code or not state:
         raise HTTPException(status_code=422, detail="Missing 'code' or 'state' query parameter")
 
     try:
-        # Decode the state (JWT token)
+        # Decode and validate the JWT token in state
         user = decode_jwt(state)
 
         sp_oauth = get_spotify_oauth(user["user_id"])
@@ -194,6 +196,8 @@ def callback(code: str = None, state: str = None):
 
         # Redirect back to the frontend's loading page
         return RedirectResponse(url="https://lyricalize-419bc3d24ee4.herokuapp.com/loadingpage")
+    except JWTError:
+        return JSONResponse(content={"error": "Invalid or expired state parameter"}, status_code=401)
     except Exception as e:
         print(f"Error in /callback: {e}")
         return JSONResponse(content={"error": f"Authentication failed: {str(e)}"}, status_code=500)
