@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import API_URL from "../config"; // Import the API URL
 
 function LandingPage() {
   const [spotifyAuthUrl, setSpotifyAuthUrl] = useState("");
+  const navigate = useNavigate(); // Hook for navigation
 
   // Fetch the Spotify login URL and JWT token from the backend
   useEffect(() => {
@@ -47,10 +49,25 @@ function LandingPage() {
           border: "none",
           borderRadius: "5px",
           cursor: "pointer",
+          marginRight: "10px",
         }}
         onClick={handleLogin}
       >
         Login with Spotify
+      </button>
+      <button
+        style={{
+          padding: "10px 20px",
+          fontSize: "1.2em",
+          color: "#fff",
+          backgroundColor: "#555",
+          border: "none",
+          borderRadius: "5px",
+          cursor: "pointer",
+        }}
+        onClick={() => navigate("/details")} // Navigate to /details
+      >
+        About
       </button>
     </div>
   );
